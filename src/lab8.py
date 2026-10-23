@@ -1,115 +1,144 @@
-import psycopg2
 import os
+import sqlite3
 
-# --- DANGER ZONE ---
-# PASSWORD stored in plain text. This is not secure.
-# In a real-world application, use environment variables
-# or a secret management service.
-# For this lab, you can set an environment variable:
-# export DB_PASSWORD='your_password'
-# --- /DANGER ZONE ---
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cinema.db")
 
-# --- STUDENT TODO: ---
-# 1. Replace 'your_database' with the name of your database
-# 2. Replace 'your_user' with your database username (often 'postgres')
-# 3. Replace 'your_password' with your database password
-# 4. Replace 'your_host' with your database host (usually 'localhost')
-# 5. Replace 'your_port' with your database port (usually '5432' for PostgreSQL)
 
-DB_NAME = "your_database"
-DB_USER = "postgres"
-DB_PASS = os.getenv("DB_PASSWORD", "your_password") # Fallback to insecure default
-DB_HOST = "localhost"
-DB_PORT = "5432"
+def create_table(connection):
+    try:
+        cursor = connection.cursor()
+        cursor.execute("DROP TABLE IF EXISTS movies")
+        cursor.execute(
+            """
+            CREATE TABLE movies (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                genre TEXT NOT NULL,
+                duration INTEGER,
+                release_year INTEGER
+            )
+            """
+        )
+        connection.commit()
+        print("Таблицю movies створено.")
+    except sqlite3.Error as error:
+        connection.rollback()
+        print(f"Помилка створення таблиці: {error}")
+
+
+def insert_movies(connection):
+    movies = [
+        ("Початок", "Фантастика", 148, 2010),
+        ("Хрещений батько", "Драма", 175, 1972),
+        ("Темний лицар", "Бойовик", 152, 2008),
+        ("Форрест Гамп", "Драма", 142, 1994),
+        ("Матриця", "Фантастика", 136, 1999),
+        ("Король Лев", "Мультфільм", 88, 1994),
+    ]
+    try:
+        cursor = connection.cursor()
+        cursor.executemany(
+            "INSERT INTO movies (title, genre, duration, release_year) VALUES (?, ?, ?, ?)",
+            movies,
+        )
+        connection.commit()
+        print(f"Додано фільмів: {cursor.rowcount}")
+    except sqlite3.Error as error:
+        connection.rollback()
+        print(f"Помилка додавання даних: {error}")
+
+
+def update_movie(connection):
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "UPDATE movies SET duration = ? WHERE title = ?",
+            (150, "Темний лицар"),
+        )
+        connection.commit()
+        print(f"Оновлено записів: {cursor.rowcount}")
+    except sqlite3.Error as error:
+        connection.rollback()
+        print(f"Помилка оновлення даних: {error}")
+
+
+def delete_movie(connection):
+    try:
+        cursor = connection.cursor()
+        cursor.execute("DELETE FROM movies WHERE title = ?", ("Форрест Гамп",))
+        connection.commit()
+        print(f"Видалено записів: {cursor.rowcount}")
+    except sqlite3.Error as error:
+        connection.rollback()
+        print(f"Помилка видалення даних: {error}")
+
+
+def print_movies(rows):
+    print(f"{'ID':<4}{'Назва':<22}{'Жанр':<14}{'Тривалість':<12}{'Рік':<6}")
+    print("-" * 58)
+    for row in rows:
+        duration = f"{row[3]} хв"
+        print(f"{row[0]:<4}{row[1]:<22}{row[2]:<14}{duration:<12}{row[4]:<6}")
+
+
+def show_all(connection, title):
+    try:
+        cursor = connection.cursor()
+        cursor.execute("SELECT id, title, genre, duration, release_year FROM movies")
+        print(f"\n{title}")
+        print_movies(cursor.fetchall())
+    except sqlite3.Error as error:
+        print(f"Помилка вибірки даних: {error}")
+
+
+def show_by_genre(connection, genre):
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT id, title, genre, duration, release_year FROM movies WHERE genre = ?",
+            (genre,),
+        )
+        print(f"\nФільми жанру '{genre}':")
+        print_movies(cursor.fetchall())
+    except sqlite3.Error as error:
+        print(f"Помилка вибірки даних: {error}")
+
+
+def show_sorted_by_duration(connection):
+    try:
+        cursor = connection.cursor()
+        cursor.execute(
+            "SELECT id, title, genre, duration, release_year FROM movies ORDER BY duration DESC"
+        )
+        print("\nФільми, відсортовані за тривалістю (від найдовшого):")
+        print_movies(cursor.fetchall())
+    except sqlite3.Error as error:
+        print(f"Помилка вибірки даних: {error}")
+
 
 def main():
-    """
-    Main function to connect to the database and perform operations.
-    Students should modify this function to complete their lab assignments.
-    """
-    conn = None  # Initialize conn to None
+    connection = None
     try:
-        # Establish the connection
-        conn = psycopg2.connect(
-            database=DB_NAME,
-            user=DB_USER,
-            password=DB_PASS,
-            host=DB_HOST,
-            port=DB_PORT
-        )
-        print("Database connected successfully")
-        cur = conn.cursor()
+        connection = sqlite3.connect(DB_PATH)
+        print("З'єднання з базою даних cinema.db встановлено.")
 
-        # --- STUDENT TODO: Task 3 - Create Table ---
-        # Write your SQL query to create a table.
-        # Example for 'students' table:
-        # create_table_query = """
-        # CREATE TABLE IF NOT EXISTS students (
-        #     id SERIAL PRIMARY KEY,
-        #     name VARCHAR(100) NOT NULL,
-        #     age INTEGER,
-        #     admission_date DATE
-        # );
-        # """
-        # cur.execute(create_table_query)
-        # conn.commit()
-        # print("Table 'students' created successfully.")
+        create_table(connection)
+        insert_movies(connection)
+        show_all(connection, "Усі фільми після додавання:")
 
-        # --- STUDENT TODO: Task 4 - Insert Data ---
-        # Write your SQL query to insert data.
-        # Use executemany for multiple inserts.
-        # Example for 'students' table:
-        # insert_query = "INSERT INTO students (name, age, admission_date) VALUES (%s, %s, %s);"
-        # student_data = [
-        #     ('John Doe', 20, '2023-09-01'),
-        #     ('Jane Smith', 22, '2022-09-01'),
-        #     ('Alice Johnson', 19, '2024-09-01'),
-        #     ('Bob Williams', 21, '2023-09-01'),
-        #     ('Anna Brown', 20, '2022-09-01')
-        # ]
-        # cur.executemany(insert_query, student_data)
-        # conn.commit()
-        # print(f"{cur.rowcount} records inserted successfully.")
+        update_movie(connection)
+        delete_movie(connection)
+        show_all(connection, "Усі фільми після оновлення та видалення:")
 
-        # --- STUDENT TODO: Task 5 - Update Data ---
-        # Write your SQL query to update data.
-        # Example for 'students' table:
-        # update_query = "UPDATE students SET age = 21 WHERE name = 'John Doe';"
-        # cur.execute(update_query)
-        # conn.commit()
-        # print(f"{cur.rowcount} record(s) updated successfully.")
-
-        # --- STUDENT TODO: Task 6 - Delete Data ---
-        # Write your SQL query to delete data.
-        # Example for 'students' table:
-        # delete_query = "DELETE FROM students WHERE name = 'Jane Smith';"
-        # cur.execute(delete_query)
-        # conn.commit()
-        # print(f"{cur.rowcount} record(s) deleted successfully.")
-
-        # --- STUDENT TODO: Task 7 - Select Data ---
-        # Write your SQL query to select data.
-        # Fetch and print the results.
-        # Example for 'students' table:
-        # select_query = "SELECT * FROM students ORDER BY age DESC;"
-        # cur.execute(select_query)
-        # records = cur.fetchall()
-        # print("\n--- Student Records ---")
-        # for record in records:
-        #     print(f"ID: {record[0]}, Name: {record[1]}, Age: {record[2]}, Admission Date: {record[3]}")
-        # print("-----------------------\n")
-
-        # Remember to close the cursor
-        cur.close()
-
-    except (Exception, psycopg2.DatabaseError) as error:
-        print(f"Error while connecting to PostgreSQL: {error}")
-
+        show_by_genre(connection, "Фантастика")
+        show_sorted_by_duration(connection)
+    except sqlite3.Error as error:
+        print(f"Помилка бази даних: {error}")
     finally:
-        # Ensure the connection is closed
-        if conn is not None:
-            conn.close()
-            print("Database connection closed.")
+        if connection is not None:
+            connection.close()
+            print("\nЗ'єднання з базою даних закрито.")
+
 
 if __name__ == "__main__":
     main()
